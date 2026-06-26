@@ -1,0 +1,13 @@
+ir_datasets
+scikit-learn
+rank_bm25
+numpy
+joblib
+nltk
+pyspellchecker
+sentence-transformers
+bertopic
+fastapi
+uvicorn[standard]
+psycopg[binary]
+requests

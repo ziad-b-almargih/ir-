@@ -1,0 +1,15 @@
+venv/
+.git/
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.swp
+.DS_Store
+# Build artifacts already produced locally — let the container build its own.
+data_store/
+notebooks/
+reports/

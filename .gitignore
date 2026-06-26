@@ -1,0 +1,35 @@
+# --- Python Specific ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual Environment (Crucial) ---
+# Assuming your venv folder is named 'venv'
+venv/
+env/
+ENV/
+.env/
+
+# --- IDE/Editor Settings ---
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
+
+# --- Data & Logs ---
+# If you save your matrices or indices to disk later, ignore them
+*.pkl
+*.json
+*.log
+*.csv
+*.joblib
+data_store/
+
+# --- Build/Distribution ---
+dist/
+build/
+*.egg-info/

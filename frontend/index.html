@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>IR Search Engine</title>
+    <link rel="stylesheet" href="styles.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<header class="topbar">
+    <span class="dot"></span>
+    <div>
+        <h1>IR Search Engine</h1>
+        <p>Information retrieval console</p>
+    </div>
+    <nav class="nav">
+        <button class="navbtn active" data-view="search">Search</button>
+        <button class="navbtn" data-view="evaluation">Evaluation</button>
+        <button class="navbtn" data-view="topics">Topics</button>
+        <button class="navbtn" data-view="settings" title="Settings">⚙</button>
+    </nav>
+</header>
+
+<main>
+    <!-- ===================== SEARCH VIEW ===================== -->
+    <section class="view active" id="view-search">
+      <div class="search-with-sidebar">
+        <div class="search-main">
+        <div class="card">
+            <h2>Search</h2>
+            <p class="hint">Pick a database and a representation model, then run your query.</p>
+            <div class="row">
+                <div class="field grow">
+                    <label>Database</label>
+                    <select id="searchDataset"></select>
+                </div>
+                <div class="field">
+                    <label>Model</label>
+                    <select id="searchModel"></select>
+                </div>
+                <div class="field">
+                    <label>Top K</label>
+                    <input type="number" id="topK" value="10" min="1" max="100"/>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field grow">
+                    <label>Filter by topic (optional)</label>
+                    <input type="text" id="topicSearch" placeholder="Type to filter topics by keyword..." />
+                    <select id="topicFilter" style="margin-top:.4rem">
+                        <option value="">All topics</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row bm25" id="bm25Params">
+                <div class="field">
+                    <label>BM25 k1</label>
+                    <input type="number" id="k1" value="1.5" step="0.1" min="0" max="3"/>
+                </div>
+                <div class="field">
+                    <label>BM25 b</label>
+                    <input type="number" id="b" value="0.75" step="0.05" min="0" max="1"/>
+                </div>
+            </div>
+            <div class="row">
+                <div class="field grow">
+                    <label>Query</label>
+                    <input type="text" id="query" placeholder="e.g. how to learn python programming"/>
+                </div>
+                <button class="btn" id="suggestBtn">Suggest</button>
+                <button class="btn btn-primary" id="searchBtn">Search</button>
+            </div>
+            <div class="row">
+                <label class="check"><input type="checkbox" id="searchRefine"/> Refine query (spell-check + WordNet synonyms)</label>
+                <label class="check" style="margin-left:1rem"><input type="checkbox" id="searchUseHistory"/> Use search history (semantic expansion)</label>
+            </div>
+            <div class="chips" id="suggestions"></div>
+            <p class="note" id="searchNote"></p>
+        </div>
+        <div class="card">
+            <h2>Results</h2>
+            <div class="metrics" id="searchMetrics" style="display:none;margin-bottom:.8rem"></div>
+            <div class="results" id="results"><span class="muted">No search yet.</span></div>
+        </div>
+        </div><!-- /search-main -->
+
+        <aside class="search-sidebar">
+            <div class="card">
+                <h2>Test queries (qrels)</h2>
+                <p class="hint">Browse the dataset's judged queries. Expand a query to see its
+                    relevant documents (from qrels), or use it as a search query.</p>
+                <input type="text" id="qrelFilter" placeholder="Filter queries by text or id..." />
+                <div class="qrels-list" id="qrelsList" style="margin-top:.5rem">
+                    <span class="muted">Loading...</span>
+                </div>
+                <div class="pager">
+                    <span id="qrelsCount">—</span>
+                    <span>
+                        <button class="btn" id="qrelsPrev" style="padding:.3rem .7rem">Prev</button>
+                        <button class="btn" id="qrelsNext" style="padding:.3rem .7rem">Next</button>
+                    </span>
+                </div>
+            </div>
+        </aside>
+      </div><!-- /search-with-sidebar -->
+    </section>
+
+    <!-- ===================== EVALUATION VIEW ===================== -->
+    <section class="view" id="view-evaluation">
+        <div class="card">
+            <h2>Evaluation</h2>
+            <p class="hint">Evaluate a model on the test queries (MAP, Recall@100, P@10, nDCG@10).</p>
+            <div class="row">
+                <div class="field grow">
+                    <label>Database</label>
+                    <select id="evalDataset"></select>
+                </div>
+                <div class="field">
+                    <label>Model</label>
+                    <select id="evalModel"></select>
+                </div>
+                <div class="field">
+                    <label>Queries (sample)</label>
+                    <input type="number" id="numQueries" value="50" min="1" max="50000"/>
+                </div>
+                <button class="btn btn-primary" id="evalBtn">Run</button>
+            </div>
+            <div class="checks">
+                <label class="check"><input type="checkbox" id="allQueries"/> Run on ALL qrels (background; auto-saved)</label>
+                <label class="check"><input type="checkbox" id="evalRefine"/> Apply query refinement</label>
+                <label class="check"><input type="checkbox" id="evalSave"/> Save run to database</label>
+            </div>
+            <p class="note" id="evalNote"></p>
+            <div class="metrics" id="metrics"></div>
+        </div>
+
+        <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <h2>Saved evaluations</h2>
+                <button class="btn" id="refreshEvalBtn">Refresh</button>
+            </div>
+            <p class="hint">All persisted runs for the selected database.</p>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Model</th>
+                        <th>Refine</th>
+                        <th>All qrels</th>
+                        <th>N</th>
+                        <th>MAP</th>
+                        <th>nDCG@10</th>
+                        <th>P@10</th>
+                        <th>R@100</th>
+                        <th>Time (s)</th>
+                        <th>Status</th>
+                        <th class="when">When</th>
+                    </tr>
+                    </thead>
+                    <tbody id="evalRows"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Charts</h2>
+            <p class="hint">Latest ready run per (model, refine) for the selected database.</p>
+            <div class="charts">
+                <div class="chart-box"><canvas id="chartMap"></canvas></div>
+                <div class="chart-box"><canvas id="chartNdcg"></canvas></div>
+                <div class="chart-box"><canvas id="chartP10"></canvas></div>
+                <div class="chart-box"><canvas id="chartRecall"></canvas></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===================== TOPICS VIEW ===================== -->
+    <section class="view" id="view-topics">
+        <div class="card">
+            <h2>Topics</h2>
+            <p class="hint">Topical clusters discovered with BERTopic on top of the embedding model.</p>
+            <div class="row">
+                <div class="field grow">
+                    <label>Database</label>
+                    <select id="topicsDataset"></select>
+                </div>
+                <button class="btn" id="refreshTopicsBtn">Refresh</button>
+                <button class="btn" id="buildTopicBtn">Build Topics</button>
+            </div>
+            <div class="chart-box" style="margin-bottom:1rem">
+                <canvas id="chartTopicSizes"></canvas>
+            </div>
+            <table>
+                <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Label</th>
+                    <th>Size</th>
+                    <th>Top words</th>
+                </tr>
+                </thead>
+                <tbody id="topicRows"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ===================== SETTINGS VIEW ===================== -->
+    <section class="view" id="view-settings">
+        <div class="card">
+            <h2>Add Database</h2>
+            <p class="hint">Enter an ir_datasets id, choose the models to build, and store the indexes.</p>
+            <div class="row">
+                <div class="field grow">
+                    <label>Dataset name</label>
+                    <input type="text" id="newDataset" placeholder="e.g. beir/quora/test"/>
+                </div>
+            </div>
+            <div class="checks">
+                <label class="check"><input type="checkbox" class="modelChk" value="tfidf" checked/> tfidf</label>
+                <label class="check"><input type="checkbox" class="modelChk" value="bm25" checked/> bm25</label>
+                <label class="check"><input type="checkbox" class="modelChk" value="embedding"/> embedding</label>
+            </div>
+            <button class="btn btn-primary" id="buildBtn">Build &amp; Store</button>
+            <p class="note" id="buildNote"></p>
+        </div>
+        <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+                <h2>Databases</h2>
+                <button class="btn" id="refreshBtn">Refresh</button>
+            </div>
+            <p class="hint">Datasets currently loaded as indexes.</p>
+            <table>
+                <thead>
+                <tr>
+                    <th>Dataset</th>
+                    <th>Models</th>
+                    <th>Docs</th>
+                    <th>Status</th>
+                    <th>Updated</th>
+                </tr>
+                </thead>
+                <tbody id="dbRows"></tbody>
+            </table>
+        </div>
+    </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
