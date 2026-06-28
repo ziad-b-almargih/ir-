@@ -10,10 +10,11 @@ from Services.QueryRefinementService.query_refinement_service import QueryRefine
 from Services.RegistryService.registry_service import RegistryService
 from Services.RepresentationService.hybrid_parallel_strategy import HybridParallelStrategy
 from Services.RepresentationService.hybrid_serial_strategy import HybridSerialStrategy
+from Services.RepresentationService.hybrid_weighted_strategy import HybridWeightedStrategy
 from Services.TopicService.topic_service import TopicService
 
 # Hybrid models are composed on the fly from already-built children, not loaded from disk.
-HYBRID_MODELS = {"hybrid_serial", "hybrid_parallel"}
+HYBRID_MODELS = {"hybrid_serial", "hybrid_parallel", "hybrid_weighted"}
 
 
 class SearchService:
@@ -52,7 +53,7 @@ class SearchService:
 
     def test_query(self, dataset_name: str, model: str, query_id: str, top_k: int = 10,
                    k1: Optional[float] = None, b: Optional[float] = None,
-                   refine: bool = False, topic_id: Optional[int] = None) -> Dict:
+                   refine: bool = False, topic_id: Optional[int] = None, alpha: Optional[float] = None) -> Dict:
         # Run the model on a judged test query and report per-query metrics against qrels.
         from Services.EvaluationService.evaluation_metrics import (
             average_precision, ndcg_at_k, precision_at_k, recall_at_k)
@@ -63,7 +64,7 @@ class SearchService:
         if entry is None:
             raise ValueError(f"query_id '{query_id}' not found in qrels for '{dataset_name}'.")
 
-        strategy = self._get_index(dataset_name, model)
+        strategy = self._get_index(dataset_name, model, alpha)
         corpus = self._get_corpus(dataset_name)
 
         query_used = entry["text"]
@@ -206,14 +207,15 @@ class SearchService:
         models = [m for m in entry.get("models", []) if Persistence.exists(f"{dataset_name}__{m}")]
         # Expose hybrids automatically when both BM25 and Embedding are ready.
         if "bm25" in models and "embedding" in models:
-            models.extend(["hybrid_serial", "hybrid_parallel"])
+            models.extend(["hybrid_serial", "hybrid_parallel", "hybrid_weighted"])
         return models
 
     def search(self, dataset_name: str, model: str, query: str, top_k: int = 10,
                k1: Optional[float] = None, b: Optional[float] = None,
                refine: bool = False, use_history: bool = False,
+               alpha: Optional[float] = None,
                topic_id: Optional[int] = None) -> Dict:
-        strategy = self._get_index(dataset_name, model)
+        strategy = self._get_index(dataset_name, model, alpha)
         corpus = self._get_corpus(dataset_name)
 
         # Optional query refinement (spelling + synonyms) before scoring.
@@ -268,10 +270,14 @@ class SearchService:
         return {"results": results, "query_used": query_used,
                 "history_expansion": history_expansion}
 
-    def _get_index(self, dataset_name: str, model: str):
+    def _get_index(self, dataset_name: str, model: str, alpha: Optional[float] = None):
         key = f"{dataset_name}__{model}"
         if key in self._index_cache:
-            return self._index_cache[key]
+            cached = self._index_cache[key]
+            # alpha is a per-request knob — update it on the cached instance.
+            if model == "hybrid_weighted" and alpha is not None:
+                cached.alpha = max(0.0, min(1.0, float(alpha)))
+            return cached
         print("[SearchService] Loading index..." + dataset_name + " : " + model)
         if model in HYBRID_MODELS:
             # Compose of the (cached) children — no separate file on disk.
@@ -279,6 +285,10 @@ class SearchService:
             embedding = self._get_index(dataset_name, "embedding")
             if model == "hybrid_serial":
                 self._index_cache[key] = HybridSerialStrategy(bm25, embedding)
+            elif model == "hybrid_weighted":
+                # Default to 0.5 if no alpha was passed at first build.
+                self._index_cache[key] = HybridWeightedStrategy(
+                    bm25, embedding, alpha if alpha is not None else 0.5)
             else:  # hybrid_parallel
                 self._index_cache[key] = HybridParallelStrategy([bm25, embedding])
             return self._index_cache[key]

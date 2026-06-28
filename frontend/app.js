@@ -82,12 +82,16 @@ async function loadTopicsForFilter(dataset) {
         const {topics} = await apiGet(`/topics?dataset=${encodeURIComponent(dataset)}`);
         _allTopics = topics;
         renderTopicOptions(_allTopics);
-    } catch (err) { /* topics not built yet — fine, filter just stays empty */ }
+    } catch (err) { /* topics not built yet — fine, filter just stays empty */
+    }
 }
 
 document.getElementById("topicSearch").addEventListener("input", e => {
     const needle = e.target.value.trim().toLowerCase();
-    if (!needle) { renderTopicOptions(_allTopics); return; }
+    if (!needle) {
+        renderTopicOptions(_allTopics);
+        return;
+    }
     // Match on any of the topic's top words OR its id.
     const filtered = _allTopics.filter(t =>
         String(t.topic_id) === needle ||
@@ -103,9 +107,19 @@ async function loadModels(dataset, targetId) {
 }
 
 function toggleBm25() {
-    const isBm25 = document.getElementById("searchModel").value === "bm25";
-    document.getElementById("bm25Params").classList.toggle("show", isBm25);
+    const model = document.getElementById("searchModel").value;
+    document.getElementById("bm25Params").classList.toggle("show", model === "bm25");
+    document.getElementById("alphaParams").style.display =
+        model === "hybrid_weighted" ? "" : "none";
 }
+
+document.addEventListener("DOMContentLoaded", () => {
+    const alphaEl = document.getElementById("alpha");
+    const alphaVal = document.getElementById("alphaVal");
+    if (alphaEl) alphaEl.addEventListener("input", () => {
+        alphaVal.textContent = parseFloat(alphaEl.value).toFixed(2);
+    });
+});
 
 document.getElementById("searchDataset").addEventListener("change", async e => {
     await loadModels(e.target.value, "searchModel");
@@ -125,7 +139,11 @@ async function doSearch() {
     const note = document.getElementById("searchNote");
     const resultsDiv = document.getElementById("results");
     const query = document.getElementById("query").value.trim();
-    if (!query) { note.className = "note err"; note.textContent = "Please enter a query."; return; }
+    if (!query) {
+        note.className = "note err";
+        note.textContent = "Please enter a query.";
+        return;
+    }
 
     const model = document.getElementById("searchModel").value;
     const payload = {
@@ -140,10 +158,14 @@ async function doSearch() {
         payload.k1 = parseFloat(document.getElementById("k1").value);
         payload.b = parseFloat(document.getElementById("b").value);
     }
+    if (model === "hybrid_weighted") {
+        payload.alpha = parseFloat(document.getElementById("alpha").value);
+    }
     const topicVal = document.getElementById("topicFilter").value;
     if (topicVal !== "") payload.topic_id = parseInt(topicVal, 10);
 
-    note.className = "note"; note.textContent = "Searching...";
+    note.className = "note";
+    note.textContent = "Searching...";
     resultsDiv.innerHTML = "";
     try {
         // حساب الوقت قبل الاستدعاء
@@ -168,12 +190,14 @@ async function doSearch() {
         document.getElementById("searchMetrics").style.display = "none";
         renderResults(data.results, resultsDiv);
     } catch (err) {
-        note.className = "note err"; note.textContent = "Search failed: " + err.message;
+        note.className = "note err";
+        note.textContent = "Search failed: " + err.message;
     }
 }
 
 // Long text is collapsed by default with a "Show more" toggle (user-requested behaviour).
 const COLLAPSE_LIMIT = 220;
+
 function renderResults(results, container) {
     container.innerHTML = "";
     if (!results.length) {
@@ -244,10 +268,14 @@ async function doTestQuery(queryId) {
         payload.k1 = parseFloat(document.getElementById("k1").value);
         payload.b = parseFloat(document.getElementById("b").value);
     }
+    if (model === "hybrid_weighted") {
+        payload.alpha = parseFloat(document.getElementById("alpha").value);
+    }
     const topicVal = document.getElementById("topicFilter").value;
     if (topicVal !== "") payload.topic_id = parseInt(topicVal, 10);
 
-    note.className = "note"; note.textContent = `Testing qrel #${queryId}...`;
+    note.className = "note";
+    note.textContent = `Testing qrel #${queryId}...`;
     resultsDiv.innerHTML = "";
     document.getElementById("searchMetrics").style.display = "none";
 
@@ -260,7 +288,8 @@ async function doTestQuery(queryId) {
         note.textContent = `Tested qrel #${data.query_id} · ${data.metrics.relevant_in_qrels} relevant doc(s) in qrels.`;
         window.scrollTo({top: 0, behavior: "smooth"});
     } catch (err) {
-        note.className = "note err"; note.textContent = "Test failed: " + err.message;
+        note.className = "note err";
+        note.textContent = "Test failed: " + err.message;
     }
 }
 
@@ -295,7 +324,9 @@ async function showSuggestions() {
 
 document.getElementById("searchBtn").addEventListener("click", doSearch);
 document.getElementById("suggestBtn").addEventListener("click", showSuggestions);
-document.getElementById("query").addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+document.getElementById("query").addEventListener("keydown", e => {
+    if (e.key === "Enter") doSearch();
+});
 
 // ----------------------------- evaluation -----------------------------
 // "All qrels" forces save=true (per professor's rule: only full runs are authoritative).
@@ -304,7 +335,8 @@ const evalSaveEl = document.getElementById("evalSave");
 const numQueriesEl = document.getElementById("numQueries");
 allQueriesEl.addEventListener("change", () => {
     if (allQueriesEl.checked) {
-        evalSaveEl.checked = true; evalSaveEl.disabled = true;
+        evalSaveEl.checked = true;
+        evalSaveEl.disabled = true;
         numQueriesEl.disabled = true;
     } else {
         evalSaveEl.disabled = false;
@@ -355,7 +387,8 @@ document.getElementById("evalBtn").addEventListener("click", async () => {
         }
         loadEvaluations();
     } catch (err) {
-        note.className = "note err"; note.textContent = "Evaluation failed: " + err.message;
+        note.className = "note err";
+        note.textContent = "Evaluation failed: " + err.message;
     }
 });
 
@@ -379,15 +412,17 @@ async function loadEvaluations() {
                 <td>${cell(e["P@10"])}</td><td>${cell(e["Recall@100"])}</td>
                 <td>${cell(e.elapsed_seconds)}</td>
                 <td><span class="badge ${e.status}">${e.status}</span></td>
-                <td class="when">${(e.created_at || "").replace("T"," ")}</td>`;
+                <td class="when">${(e.created_at || "").replace("T", " ")}</td>`;
             rows.appendChild(tr);
         });
         renderCharts(evaluations);
-    } catch (err) { /* dataset list may not be ready yet */ }
+    } catch (err) { /* dataset list may not be ready yet */
+    }
 }
 
 // Bar charts: latest READY run per (model, refine) combo, for MAP, nDCG@10, P@10, Recall@100.
 let chartMap = null, chartNdcg = null, chartP10 = null, chartRecall = null;
+
 function renderCharts(evaluations) {
     const latest = {};   // key = `${model}|${refine}` -> evaluation
     evaluations.filter(e => e.status === "ready").forEach(e => {
@@ -401,8 +436,8 @@ function renderCharts(evaluations) {
         return hit ? hit : null;
     });
     const datasetsFor = key => [
-        {label: "raw",    data: groupFor(false).map(e => e ? e[key] : null), backgroundColor: "#73839c"},
-        {label: "refine", data: groupFor(true).map(e  => e ? e[key] : null), backgroundColor: "#f5a623"},
+        {label: "raw", data: groupFor(false).map(e => e ? e[key] : null), backgroundColor: "#73839c"},
+        {label: "refine", data: groupFor(true).map(e => e ? e[key] : null), backgroundColor: "#f5a623"},
     ];
     const baseOpts = {
         responsive: true,
@@ -412,18 +447,22 @@ function renderCharts(evaluations) {
             y: {ticks: {color: "#cdd8e8"}, grid: {color: "#26324a"}, beginAtZero: true},
         },
     };
-    const titled = title => ({...baseOpts, plugins: {...baseOpts.plugins,
-        title: {display: true, text: title, color: "#cdd8e8"}}});
+    const titled = title => ({
+        ...baseOpts, plugins: {
+            ...baseOpts.plugins,
+            title: {display: true, text: title, color: "#cdd8e8"}
+        }
+    });
     if (chartMap) chartMap.destroy();
     if (chartNdcg) chartNdcg.destroy();
     if (chartP10) chartP10.destroy();
     if (chartRecall) chartRecall.destroy();
     chartMap = new Chart(document.getElementById("chartMap"),
-        {type: "bar", data: {labels: models, datasets: datasetsFor("MAP")},      options: titled("MAP")});
+        {type: "bar", data: {labels: models, datasets: datasetsFor("MAP")}, options: titled("MAP")});
     chartNdcg = new Chart(document.getElementById("chartNdcg"),
-        {type: "bar", data: {labels: models, datasets: datasetsFor("nDCG@10")},  options: titled("nDCG@10")});
+        {type: "bar", data: {labels: models, datasets: datasetsFor("nDCG@10")}, options: titled("nDCG@10")});
     chartP10 = new Chart(document.getElementById("chartP10"),
-        {type: "bar", data: {labels: models, datasets: datasetsFor("P@10")},     options: titled("P@10")});
+        {type: "bar", data: {labels: models, datasets: datasetsFor("P@10")}, options: titled("P@10")});
     chartRecall = new Chart(document.getElementById("chartRecall"),
         {type: "bar", data: {labels: models, datasets: datasetsFor("Recall@100")}, options: titled("Recall@100")});
 }
@@ -433,10 +472,19 @@ document.getElementById("buildBtn").addEventListener("click", async () => {
     const note = document.getElementById("buildNote");
     const dataset = document.getElementById("newDataset").value.trim();
     const models = [...document.querySelectorAll(".modelChk:checked")].map(c => c.value);
-    if (!dataset) { note.className = "note err"; note.textContent = "Enter a dataset name."; return; }
-    if (!models.length) { note.className = "note err"; note.textContent = "Pick at least one model."; return; }
+    if (!dataset) {
+        note.className = "note err";
+        note.textContent = "Enter a dataset name.";
+        return;
+    }
+    if (!models.length) {
+        note.className = "note err";
+        note.textContent = "Pick at least one model.";
+        return;
+    }
 
-    note.className = "note"; note.textContent = "Build started in background...";
+    note.className = "note";
+    note.textContent = "Build started in background...";
     try {
         const startTime = performance.now();
 
@@ -450,7 +498,8 @@ document.getElementById("buildBtn").addEventListener("click", async () => {
 
         loadDatabases();
     } catch (err) {
-        note.className = "note err"; note.textContent = "Build failed: " + err.message;
+        note.className = "note err";
+        note.textContent = "Build failed: " + err.message;
     }
 });
 document.getElementById("refreshBtn").addEventListener("click", loadDatabases);
@@ -491,7 +540,8 @@ async function loadQrels() {
     listEl.innerHTML = '<span class="muted">Loading...</span>';
     try {
         const params = new URLSearchParams({
-            dataset, q: qrelsQuery, limit: QRELS_PAGE, offset: qrelsOffset});
+            dataset, q: qrelsQuery, limit: QRELS_PAGE, offset: qrelsOffset
+        });
         const data = await apiGet(`/qrels?${params.toString()}`);
         document.getElementById("qrelsCount").textContent =
             `${data.queries.length ? data.offset + 1 : 0}–${data.offset + data.queries.length} of ${data.total}`;
@@ -612,7 +662,7 @@ document.getElementById("buildTopicBtn").addEventListener("click", async () => {
         const startTime = performance.now();
 
         // Call the API
-        await apiPost("/build-topic", { dataset: dataset });
+        await apiPost("/build-topic", {dataset: dataset});
 
         const timeTaken = ((performance.now() - startTime) / 1000).toFixed(2);
 
@@ -642,7 +692,10 @@ async function loadTopicsView() {
         rows.innerHTML = "";
         if (!topics.length) {
             rows.innerHTML = '<tr><td colspan="4" class="muted">No topics built for this dataset.</td></tr>';
-            if (chartTopicSizes) { chartTopicSizes.destroy(); chartTopicSizes = null; }
+            if (chartTopicSizes) {
+                chartTopicSizes.destroy();
+                chartTopicSizes = null;
+            }
             return;
         }
         topics.forEach(t => {
@@ -663,15 +716,23 @@ async function loadTopicsView() {
         if (chartTopicSizes) chartTopicSizes.destroy();
         chartTopicSizes = new Chart(document.getElementById("chartTopicSizes"), {
             type: "bar",
-            data: {labels, datasets: [{label: "Documents per topic", data,
-                                        backgroundColor: "#f5a623"}]},
+            data: {
+                labels, datasets: [{
+                    label: "Documents per topic", data,
+                    backgroundColor: "#f5a623"
+                }]
+            },
             options: {
                 responsive: true,
-                plugins: {legend: {labels: {color: "#cdd8e8"}},
-                          title: {display: true, text: "Top topics by size", color: "#cdd8e8"}},
+                plugins: {
+                    legend: {labels: {color: "#cdd8e8"}},
+                    title: {display: true, text: "Top topics by size", color: "#cdd8e8"}
+                },
                 scales: {
-                    x: {ticks: {color: "#cdd8e8", maxRotation: 60, minRotation: 30},
-                        grid: {color: "#26324a"}},
+                    x: {
+                        ticks: {color: "#cdd8e8", maxRotation: 60, minRotation: 30},
+                        grid: {color: "#26324a"}
+                    },
                     y: {ticks: {color: "#cdd8e8"}, grid: {color: "#26324a"}, beginAtZero: true},
                 },
             },

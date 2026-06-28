@@ -39,6 +39,7 @@ class SearchRequest(BaseModel):
     top_k: int = Field(10, ge=1, le=100)
     k1: Optional[float] = None
     b: Optional[float] = None
+    alpha: Optional[float] = Field(None, ge=0.0, le=1.0)  # hybrid_weighted: lex vs sem balance
     refine: bool = False
     use_history: bool = False        # silently expand query using semantically similar past queries
     topic_id: Optional[int] = None   # if set, restrict results to docs in this topic
@@ -88,6 +89,7 @@ class TestQueryRequest(BaseModel):
     b: Optional[float] = None
     refine: bool = False
     topic_id: Optional[int] = None
+    alpha: Optional[float] = None
 
 
 class BuildTopicRequest(BaseModel):
@@ -217,7 +219,7 @@ def test_query(request: TestQueryRequest):
         return search_service.test_query(
             dataset_name=request.dataset, model=request.model, query_id=request.query_id,
             top_k=request.top_k, k1=request.k1, b=request.b,
-            refine=request.refine, topic_id=request.topic_id)
+            refine=request.refine, topic_id=request.topic_id, alpha = request.alpha)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
 
@@ -228,7 +230,8 @@ def search(request: SearchRequest):
         outcome = search_service.search(
             dataset_name=request.dataset, model=request.model, query=request.query,
             top_k=request.top_k, k1=request.k1, b=request.b, refine=request.refine,
-            use_history=request.use_history, topic_id=request.topic_id)
+            use_history=request.use_history, alpha=request.alpha,
+            topic_id=request.topic_id)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
 

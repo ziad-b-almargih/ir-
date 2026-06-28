@@ -63,6 +63,12 @@
                     <input type="number" id="b" value="0.75" step="0.05" min="0" max="1"/>
                 </div>
             </div>
+            <div class="row" id="alphaParams" style="display:none">
+                <div class="field grow">
+                    <label>Hybrid alpha (1.0 = pure BM25, 0.0 = pure Embedding) — <span id="alphaVal">0.50</span></label>
+                    <input type="range" id="alpha" value="0.5" step="0.05" min="0" max="1" style="width:100%"/>
+                </div>
+            </div>
             <div class="row">
                 <div class="field grow">
                     <label>Query</label>
